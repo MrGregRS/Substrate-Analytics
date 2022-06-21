@@ -1,32 +1,15 @@
 from substrateinterface import SubstrateInterface
 import pandas as pd
-import sqlalchemy
-import os
 from datetime import datetime as dt
 import pytz
+from time import sleep
 
-eastern = pytz.timezone('US/Eastern')
-date_format = '%m-%d-%y %I:%M %p'
-
-HOST = os.environ.get('SQLHOST')
-DB_USER = os.environ.get('DB_USER')
-DB_PASSWORD = os.environ.get('DB_PASSWORD')
-DB = os.environ.get('DB')
-PORT = os.environ.get('SQLPORT')
-
-pool = sqlalchemy.create_engine(
-        sqlalchemy.engine.url.URL.create(
-        drivername="postgresql+psycopg2",
-        username=DB_USER,
-        password=DB_PASSWORD,
-        host=HOST,
-        port=PORT,
-        database=DB))
+from sqlengine.snowflake import engine as pool
 
 class Blockchain():
     def __init__(self, url, ss58_format, type_registry_preset):
         self.url = url
-        self.ss58_format = ss58_format
+        self.ss58_format = int(ss58_format)
         self.type_registry_preset = type_registry_preset
         self.substrate = SubstrateInterface(url=self.url,ss58_format=self.ss58_format,type_registry_preset=self.type_registry_preset)
         self.substrate.reload_type_registry()
@@ -70,13 +53,18 @@ class Blockchain():
             try:
                 #If there is current data stored in SQL, set the starting era to the next era
                 table = str(self.type_registry_preset) + '_validator_reward_hist'
-                start_era = pool.execute('''SELECT COALESCE(max(era),0) FROM public.{};'''.format(table)).fetchall()[0][0] + 1
+                start_era = pool.execute('''SELECT COALESCE(max(era),0) FROM {};'''.format(table)).fetchall()[0][0] + 1
                 start_era = int(start_era)
             except:
                 #If there is no SQL data, set the starting era to the depth of on chain history
-                start_era = int(str(self.active_era))-self.history_depth
+                start_era = 1
         else:
             start_era = int(start_era)
+
+        #Verify start era is greater than or equal to the earlist era on chain
+        min_start_era = int(str(self.active_era))-int(str(self.history_depth))
+        start_era = min_start_era if start_era < min_start_era else start_era
+
         #Create a log to record the results of each era's data load
         update_log = {'chain':self.type_registry_preset}
 
@@ -130,7 +118,8 @@ class Blockchain():
             update_utc_datetime = pytz.utc.localize(dt.utcnow())
             validator_df['update_utc_datetime'] = update_utc_datetime
             nominator_df['update_utc_datetime'] = update_utc_datetime
-
+            print(update_utc_datetime)
+            sleep(0.5)
             #upload the data to SQL - create the tables if they do not exist
             try:
                 if len(validator_df) > 100:
@@ -138,13 +127,13 @@ class Blockchain():
 
                         #upload the validator data - if the data for the era already exists, restate the data for that era and delete the old data
                         table = str(self.type_registry_preset) + '_validator_reward_hist'
-                        validator_df.to_sql(table, con=connection, if_exists='append',index=False)
-                        connection.execute('''DELETE FROM public.{} WHERE "era" = '{}' AND ("update_utc_datetime" is NULL or "update_utc_datetime" < '{}');'''.format(table, era, update_utc_datetime))
+                        validator_df.to_sql(table, con=connection, if_exists='append',index=False, chunksize=15000)
+                        connection.execute('''DELETE FROM {} WHERE era = '{}' AND (update_utc_datetime is NULL or update_utc_datetime < '{}');'''.format(table, era, update_utc_datetime))
 
                         #upload the nominator data - if the data for the era already exists, restate the data for that era and delete the old data
                         table = str(self.type_registry_preset) + '_nominator_reward_hist'
-                        nominator_df.to_sql(table, con=connection, if_exists='append',index=False)
-                        connection.execute('''DELETE FROM public.{} WHERE "era" = '{}' AND ("update_utc_datetime" is NULL or "update_utc_datetime" < '{}');'''.format(table, era, update_utc_datetime))
+                        nominator_df.to_sql(table, con=connection, if_exists='append',index=False, chunksize=15000)
+                        connection.execute('''DELETE FROM {} WHERE era = '{}' AND (update_utc_datetime is NULL or update_utc_datetime < '{}');'''.format(table, era, update_utc_datetime))
                     update_log[era] = 'Success'
                 else:
                     update_log[era] = 'No Data'

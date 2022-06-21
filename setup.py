@@ -1,22 +1,6 @@
 import pandas as pd
-import sqlalchemy
-import os
 
-HOST = os.environ.get('SQLHOST')
-DB_USER = os.environ.get('DB_USER')
-DB_PASSWORD = os.environ.get('DB_PASSWORD')
-DB = os.environ.get('DB')
-PORT = os.environ.get('SQLPORT')
-
-pool = sqlalchemy.create_engine(
-        sqlalchemy.engine.url.URL.create(
-        drivername="postgresql+psycopg2",
-        username=DB_USER,
-        password=DB_PASSWORD,
-        host=HOST,
-        port=PORT,
-        database=DB))
-
+from sqlengine.snowflake import engine as pool
 
 #setup the connection parameters for the substrate chain RPC 
 polkadot = ['wss://rpc.polkadot.io', 0, 'polkadot']
