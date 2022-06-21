@@ -6,7 +6,16 @@ The end resut will be 2 tables added to your SQL database for each chain. Valida
 
 1. Clone the repo
 2. Create a virtual environment and install requirements `python -m pip install -r requirements.txt`
-3. Add environment variables for your Postgres SQL server and database
+3. Add environment variables for your Snowflake SQL server connection
+
+`SNOWFLAKE_USER`
+`SNOWFLAKE_PASSWORD`
+`SNOWFLAKE_ACCOUNT`
+`SNOWFLAKE_DB`
+
+Learn more about Python and Snowflake SQLAlchemy connection: https://docs.snowflake.com/en/user-guide/sqlalchemy.html
+
+Optional: Add environment variables for your Postgres SQL server and database
 
 `SQLHOST = your_server_ip`
 `DB_USER = username`
